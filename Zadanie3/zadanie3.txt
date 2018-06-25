@@ -1,0 +1,83 @@
+Wyświetlamy dane w formacie 
+data | sukcesy | utraty | do_ponowienia | zainteresowani_utraty | niezainteresowani_sukcesy, 
+gdzie data to aktualna data. 
+a) sukcesy - wybieramy z tabeli statuses klientów, których status to "zainteresowany",
+	a data jest równa dzisiejszej dacie, od teraz te wartości nazywamy S,
+	następnie zliczamy liczbę wystąpień klient_id w S o powyższych własnościach, od teraz 
+	nazywanych S2,
+b) utraty - wybieramy z tabeli statuses klientów, których status to "niezainteresowany",
+	a data jest równa dzisiejszej dacie, od teraz te wartości nazywamy U,
+	następnie zliczamy liczbę wystąpień klient_id w S o powyższych własnościach, od teraz 
+	nazywanych U2,
+c) do_ponowienia - wybieramy z tabeli statuses klientów, których status to "poczta_głosowa" 
+	lub "nie_ma_w_domu", a data jest równa dzisiejszej dacie, od teraz te wartości nazywamy P,
+	następnie zliczamy liczbę wystąpień klient_id w S o powyższych własnościach, od teraz 
+	nazywanych P2,
+d) zainteresowani_utraty - wybieramy z tabeli statuses klientów, których ostatni status to 
+	"niezainteresowany", a data jest równa dzisiejszej dacie i grupujemy tak otrzymane wartości 
+	po klient_id, od tej pory nazywamy je Z, następnie dołączamy wybranych klientów, których 
+	ostatni status to "zainteresowany",	a data jest wcześniejsza niż aktualna i grupujemy tak 
+	otrzymane wartości po klient_id, od tej pory nazywamy je Z1, jęsli klient_id jest takie samo
+	dla Z i Z1 oraz ostatnia data z Z jest nowsza niż w Z1 to zliczamy liczbę wystąpień klient_id
+	o powyższych własnościach, od teraz nazywanych Z2,
+e) zainteresowani_utraty - wybieramy z tabeli statuses klientów, których ostatni status to 
+	"zainteresowany", a data jest równa dzisiejszej dacie i grupujemy tak otrzymane wartości 
+	po klient_id, od tej pory nazywamy je N, następnie dołączamy wybranych klientów, których 
+	ostatni status to "niezainteresowany",	a data jest wcześniejsza niż aktualna i grupujemy tak 
+	otrzymane wartości po klient_id, od tej pory nazywamy je N1, jęsli klient_id jest takie samo
+	dla N i N1 oraz ostatnia data z N jest nowsza niż w N1 to zliczamy liczbę wystąpień klient_id
+	o powyższych własnościach, od teraz nazywanych N2.
+Otrzymane wartości w S2, U2, P2, Z2, N2 wyświetlamy w formacie zapisanym powyżej.
+
+	
+
+SELECT DISTINCT CURDATE() AS data,
+S2.sukcesy, U2.utraty, P2.do_ponowienia, Z2.zainteresowani_utraty, N2.niezainteresowani_sukcesy
+FROM statuses
+JOIN (SELECT COUNT(S.klient_id) AS sukcesy
+		FROM (SELECT kontakt_ts, klient_id
+				FROM statuses
+				WHERE status = "zainteresowany"
+				AND DATE(kontakt_ts) = CURDATE() ) AS S)
+		AS S2
+JOIN (SELECT COUNT(U.klient_id) AS utraty
+		FROM (SELECT kontakt_ts, klient_id
+				FROM statuses
+				WHERE status = "niezainteresowany"
+				AND DATE(kontakt_ts) = CURDATE() ) AS U)
+		AS U2
+JOIN (SELECT COUNT(P.klient_id) AS do_ponowienia
+		FROM (SELECT kontakt_ts, klient_id
+				FROM statuses
+				WHERE (status = "poczta_głosowa"
+				OR status = "nie_ma_w_domu")
+				AND DATE(kontakt_ts) = CURDATE() ) AS P)
+		AS P2
+JOIN (SELECT COUNT(Z.klient_id) AS zainteresowani_utraty
+		FROM (SELECT kontakt_ts, klient_id, MAX(kontakt_ts) AS max_kontakt_ts
+				FROM statuses
+				WHERE status = "zainteresowany"
+				AND DATE(kontakt_ts) = CURDATE()
+				GROUP BY klient_id ) AS Z
+		JOIN (SELECT status, kontakt_ts, klient_id, MAX(kontakt_ts) AS max_kontakt_ts
+				FROM statuses
+				WHERE status = "niezainteresowany"
+				AND DATE(kontakt_ts) < CURDATE()
+				GROUP BY klient_id) AS Z1
+		ON Z.klient_id = Z1.klient_id
+		AND Z.max_kontakt_ts > Z1.max_kontakt_ts)
+		AS Z2
+JOIN (SELECT COUNT(N.klient_id) AS niezainteresowani_sukcesy
+		FROM (SELECT kontakt_ts, klient_id, MAX(kontakt_ts) AS max_kontakt_ts
+				FROM statuses
+				WHERE status = "niezainteresowany"
+				AND DATE(kontakt_ts) = CURDATE()
+				GROUP BY klient_id ) AS N
+		JOIN (SELECT status, kontakt_ts, klient_id, MAX(kontakt_ts) AS max_kontakt_ts
+				FROM statuses
+				WHERE status = "zainteresowany"
+				AND DATE(kontakt_ts) < CURDATE()
+				GROUP BY klient_id) AS N1
+		ON N.klient_id = N1.klient_id
+		AND N.max_kontakt_ts > N1.max_kontakt_ts)
+		AS N2

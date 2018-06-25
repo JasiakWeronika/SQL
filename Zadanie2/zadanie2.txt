@@ -1,0 +1,18 @@
+Wybieramy klient_id, oraz maksymalną wartość 
+dla kontakt_ts (od teraz nazywaną max_kontakt_ts) z tabeli statusy,
+jeśli podjęto co najmniej 3 próby kontaktu i grupujemy ją po klient_id
+(od teraz otrzymane wartości nazywamy s2).
+Następnie łączymy ją z tabelą statuses (od teraz nazywaną s1),
+jeśli dla tabeli s1 i s2 wartość klient_id, oraz kontak_ts i
+max-kontakt_ts są takie same to grupujemy s1 po klient_id
+i wybieramy z niej klient_id i status.
+
+SELECT DISTINCT s1.klient_id, s1.status
+FROM statuses AS s1
+JOIN ( SELECT klient_id, max(kontakt_ts) AS max_kontakt_ts
+       FROM statuses
+       GROUP BY klient_id
+       HAVING count(klient_id)>=3 ) AS s2
+ON s1.klient_id = s2.klient_id
+AND s1.kontakt_ts = s2.max_kontakt_ts
+GROUP BY klient_id 
